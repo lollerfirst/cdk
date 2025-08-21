@@ -9,6 +9,7 @@ use std::{env, fs};
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 use bip39::Mnemonic;
+use cashu::nut04::QuoteId;
 use cashu::{MeltQuoteBolt12Request, MintQuoteBolt12Request, MintQuoteBolt12Response};
 use cdk::amount::SplitTarget;
 use cdk::cdk_database::{self, MintDatabase, WalletDatabase};
@@ -81,16 +82,15 @@ impl MintConnector for DirectMintConnection {
         &self,
         quote_id: &str,
     ) -> Result<MintQuoteBolt11Response<String>, Error> {
-        let quote_id_uuid = Uuid::from_str(quote_id).unwrap();
         self.mint
-            .check_mint_quote(&quote_id_uuid)
+            .check_mint_quote(&QuoteId::from_str(quote_id)?)
             .await
             .map(Into::into)
     }
 
     async fn post_mint(&self, request: MintRequest<String>) -> Result<MintResponse, Error> {
-        let request_uuid = request.try_into().unwrap();
-        self.mint.process_mint_request(request_uuid).await
+        let request_id: MintRequest<QuoteId> = request.try_into().unwrap();
+        self.mint.process_mint_request(request_id).await
     }
 
     async fn post_melt_quote(
@@ -107,9 +107,8 @@ impl MintConnector for DirectMintConnection {
         &self,
         quote_id: &str,
     ) -> Result<MeltQuoteBolt11Response<String>, Error> {
-        let quote_id_uuid = Uuid::from_str(quote_id).unwrap();
         self.mint
-            .check_melt_quote(&quote_id_uuid)
+            .check_melt_quote(&QuoteId::from_str(quote_id)?)
             .await
             .map(Into::into)
     }
@@ -157,7 +156,7 @@ impl MintConnector for DirectMintConnection {
         &self,
         request: MintQuoteBolt12Request,
     ) -> Result<MintQuoteBolt12Response<String>, Error> {
-        let res: MintQuoteBolt12Response<Uuid> =
+        let res: MintQuoteBolt12Response<QuoteId> =
             self.mint.get_mint_quote(request.into()).await?.try_into()?;
         Ok(res.into())
     }
@@ -166,10 +165,9 @@ impl MintConnector for DirectMintConnection {
         &self,
         quote_id: &str,
     ) -> Result<MintQuoteBolt12Response<String>, Error> {
-        let quote_id_uuid = Uuid::from_str(quote_id).unwrap();
-        let quote: MintQuoteBolt12Response<Uuid> = self
+        let quote: MintQuoteBolt12Response<QuoteId> = self
             .mint
-            .check_mint_quote(&quote_id_uuid)
+            .check_mint_quote(&QuoteId::from_str(quote_id)?)
             .await?
             .try_into()?;
 
@@ -191,9 +189,8 @@ impl MintConnector for DirectMintConnection {
         &self,
         quote_id: &str,
     ) -> Result<MeltQuoteBolt11Response<String>, Error> {
-        let quote_id_uuid = Uuid::from_str(quote_id).unwrap();
         self.mint
-            .check_melt_quote(&quote_id_uuid)
+            .check_melt_quote(&QuoteId::from_str(quote_id)?)
             .await
             .map(Into::into)
     }

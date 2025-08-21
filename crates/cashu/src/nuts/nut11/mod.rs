@@ -1216,6 +1216,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
+    use crate::nut04::QuoteId;
     use crate::nuts::Id;
     use crate::secret::Secret;
     use crate::{Amount, BlindedMessage};
@@ -1406,7 +1407,11 @@ mod tests {
         let blinded_msg = create_test_blinded_msg(pubkey);
 
         // Create melt request
-        let mut melt = MeltRequest::new(Uuid::new_v4(), vec![proof], Some(vec![blinded_msg]));
+        let mut melt = MeltRequest::new(
+            QuoteId::UUID(Uuid::new_v4()),
+            vec![proof],
+            Some(vec![blinded_msg]),
+        );
 
         // Before signing, should fail verification
         assert!(

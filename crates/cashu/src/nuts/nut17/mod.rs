@@ -1,11 +1,11 @@
 //! Specific Subscription for the cdk crate
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "mint")]
-use uuid::Uuid;
 
 #[cfg(feature = "mint")]
 use super::PublicKey;
+#[cfg(feature = "mint")]
+use crate::nut04::QuoteId;
 use crate::nuts::{
     CurrencyUnit, MeltQuoteBolt11Response, MintQuoteBolt11Response, PaymentMethod, ProofState,
 };
@@ -154,14 +154,14 @@ impl<T> From<MintQuoteBolt11Response<T>> for NotificationPayload<T> {
 pub enum Notification {
     /// ProofState id is a Pubkey
     ProofState(PublicKey),
-    /// MeltQuote id is an Uuid
-    MeltQuoteBolt11(Uuid),
-    /// MintQuote id is an Uuid
-    MintQuoteBolt11(Uuid),
-    /// MintQuote id is an Uuid
-    MintQuoteBolt12(Uuid),
-    /// MintQuote id is an Uuid
-    MeltQuoteBolt12(Uuid),
+    /// MeltQuote id is an QuoteId
+    MeltQuoteBolt11(QuoteId),
+    /// MintQuote id is an QuoteId
+    MintQuoteBolt11(QuoteId),
+    /// MintQuote id is an QuoteId
+    MintQuoteBolt12(QuoteId),
+    /// MintQuote id is an QuoteId
+    MeltQuoteBolt12(QuoteId),
 }
 
 /// Kind
@@ -195,4 +195,8 @@ pub enum Error {
     #[error("PublicKey Error: {0}")]
     /// PublicKey Error
     PublicKey(#[from] crate::nuts::nut01::Error),
+
+    #[error(transparent)]
+    /// NUT04 Error
+    NUT04(#[from] crate::nuts::nut04::Error),
 }

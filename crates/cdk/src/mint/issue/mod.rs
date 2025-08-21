@@ -1,5 +1,6 @@
 use cdk_common::amount::to_unit;
 use cdk_common::mint::MintQuote;
+use cdk_common::nut04::QuoteId;
 use cdk_common::payment::{
     Bolt11IncomingPaymentOptions, Bolt11Settings, Bolt12IncomingPaymentOptions,
     IncomingPaymentOptions, WaitPaymentResponse,
@@ -11,7 +12,6 @@ use cdk_common::{
     MintRequest, MintResponse, NotificationPayload, PaymentMethod, PublicKey,
 };
 use tracing::instrument;
-use uuid::Uuid;
 
 use crate::mint::Verification;
 use crate::Mint;
@@ -50,12 +50,12 @@ impl From<MintQuoteBolt12Request> for MintQuoteRequest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MintQuoteResponse {
     /// Lightning Network BOLT11 invoice response
-    Bolt11(MintQuoteBolt11Response<Uuid>),
+    Bolt11(MintQuoteBolt11Response<QuoteId>),
     /// Lightning Network BOLT12 offer response
-    Bolt12(MintQuoteBolt12Response<Uuid>),
+    Bolt12(MintQuoteBolt12Response<QuoteId>),
 }
 
-impl TryFrom<MintQuoteResponse> for MintQuoteBolt11Response<Uuid> {
+impl TryFrom<MintQuoteResponse> for MintQuoteBolt11Response<QuoteId> {
     type Error = Error;
 
     fn try_from(response: MintQuoteResponse) -> Result<Self, Self::Error> {
@@ -66,7 +66,7 @@ impl TryFrom<MintQuoteResponse> for MintQuoteBolt11Response<Uuid> {
     }
 }
 
-impl TryFrom<MintQuoteResponse> for MintQuoteBolt12Response<Uuid> {
+impl TryFrom<MintQuoteResponse> for MintQuoteBolt12Response<QuoteId> {
     type Error = Error;
 
     fn try_from(response: MintQuoteResponse) -> Result<Self, Self::Error> {
@@ -83,7 +83,7 @@ impl TryFrom<MintQuote> for MintQuoteResponse {
     fn try_from(quote: MintQuote) -> Result<Self, Self::Error> {
         match quote.payment_method {
             PaymentMethod::Bolt11 => {
-                let bolt11_response: MintQuoteBolt11Response<Uuid> = quote.into();
+                let bolt11_response: MintQuoteBolt11Response<QuoteId> = quote.into();
                 Ok(MintQuoteResponse::Bolt11(bolt11_response))
             }
             PaymentMethod::Bolt12 => {
@@ -303,12 +303,12 @@ impl Mint {
 
         match payment_method {
             PaymentMethod::Bolt11 => {
-                let res: MintQuoteBolt11Response<Uuid> = quote.clone().into();
+                let res: MintQuoteBolt11Response<QuoteId> = quote.clone().into();
                 self.pubsub_manager
                     .broadcast(NotificationPayload::MintQuoteBolt11Response(res));
             }
             PaymentMethod::Bolt12 => {
-                let res: MintQuoteBolt12Response<Uuid> = quote.clone().try_into()?;
+                let res: MintQuoteBolt12Response<QuoteId> = quote.clone().try_into()?;
                 self.pubsub_manager
                     .broadcast(NotificationPayload::MintQuoteBolt12Response(res));
             }
@@ -338,7 +338,7 @@ impl Mint {
     /// * `Ok(())` if removal was successful
     /// * `Error` if the quote doesn't exist or removal fails
     #[instrument(skip_all)]
-    pub async fn remove_mint_quote(&self, quote_id: &Uuid) -> Result<(), Error> {
+    pub async fn remove_mint_quote(&self, quote_id: &QuoteId) -> Result<(), Error> {
         let mut tx = self.localstore.begin_transaction().await?;
         tx.remove_mint_quote(quote_id).await?;
         tx.commit().await?;
@@ -470,7 +470,7 @@ impl Mint {
     /// * `MintQuoteResponse` - The current state of the quote
     /// * `Error` if the quote doesn't exist or checking fails
     #[instrument(skip(self))]
-    pub async fn check_mint_quote(&self, quote_id: &Uuid) -> Result<MintQuoteResponse, Error> {
+    pub async fn check_mint_quote(&self, quote_id: &QuoteId) -> Result<MintQuoteResponse, Error> {
         let mut quote = self
             .localstore
             .get_mint_quote(quote_id)
@@ -501,7 +501,7 @@ impl Mint {
     #[instrument(skip_all)]
     pub async fn process_mint_request(
         &self,
-        mint_request: MintRequest<Uuid>,
+        mint_request: MintRequest<QuoteId>,
     ) -> Result<MintResponse, Error> {
         let mut mint_quote = self
             .localstore
@@ -609,7 +609,7 @@ impl Mint {
                 .map(|p| p.blinded_secret)
                 .collect::<Vec<PublicKey>>(),
             &blind_signatures,
-            Some(mint_request.quote),
+            Some(mint_request.quote.clone()),
         )
         .await?;
 

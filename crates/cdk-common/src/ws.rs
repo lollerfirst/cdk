@@ -3,12 +3,12 @@
 //! This module extends the `cashu` crate with types and functions for the CDK, using the correct
 //! expected ID types.
 #[cfg(feature = "mint")]
+use cashu::nut04::QuoteId;
+#[cfg(feature = "mint")]
 use cashu::nut17::ws::JSON_RPC_VERSION;
 use cashu::nut17::{self};
 #[cfg(feature = "mint")]
 use cashu::NotificationPayload;
-#[cfg(feature = "mint")]
-use uuid::Uuid;
 
 use crate::pub_sub::SubId;
 
@@ -48,7 +48,7 @@ pub type NotificationInner<T> = nut17::ws::NotificationInner<T, SubId>;
 #[cfg(feature = "mint")]
 /// Converts a notification with UUID identifiers to a notification with string identifiers
 pub fn notification_uuid_to_notification_string(
-    notification: NotificationInner<Uuid>,
+    notification: NotificationInner<QuoteId>,
 ) -> NotificationInner<String> {
     nut17::ws::NotificationInner {
         sub_id: notification.sub_id,
@@ -69,7 +69,7 @@ pub fn notification_uuid_to_notification_string(
 
 #[cfg(feature = "mint")]
 /// Converts a notification to a websocket message that can be sent to clients
-pub fn notification_to_ws_message(notification: NotificationInner<Uuid>) -> WsMessageOrResponse {
+pub fn notification_to_ws_message(notification: NotificationInner<QuoteId>) -> WsMessageOrResponse {
     nut17::ws::WsMessageOrResponse::Notification(nut17::ws::WsNotification {
         jsonrpc: JSON_RPC_VERSION.to_owned(),
         method: "subscribe".to_string(),
