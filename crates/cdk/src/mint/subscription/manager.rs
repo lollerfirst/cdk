@@ -3,8 +3,8 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use cdk_common::database::{self, MintDatabase};
-use cdk_common::nut04::QuoteId;
 use cdk_common::mint::MintQuote;
+use cdk_common::nut04::QuoteId;
 use cdk_common::nut17::Notification;
 use cdk_common::{Amount, MintQuoteBolt12Response, NotificationPayload, PaymentMethod};
 
