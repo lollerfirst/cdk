@@ -1362,6 +1362,7 @@ mod tests {
             )
             .unwrap(),
             witness: Some(Witness::P2PKWitness(P2PKWitness { signatures: vec![] })),
+            p2pk_e: None,
             dleq: None,
         };
 
@@ -1465,6 +1466,7 @@ mod tests {
             )
             .unwrap(),
             witness: Some(Witness::P2PKWitness(P2PKWitness { signatures: vec![] })),
+            p2pk_e: None,
             dleq: None,
         };
 
@@ -1490,6 +1492,7 @@ mod tests {
             c: pubkey,
             witness: None,
             dleq: None,
+            p2pk_e: None,
         }
     }
 
