@@ -939,7 +939,7 @@ impl PreMintSecrets {
             let ephemeral_pubkey = ephemeral_key.public_key();
 
             // Derive the blinding scalar for the primary pubkey
-            let blinding_scalar = ecdh_kdf(&ephemeral_key, &data, keyset_id, 0 as u8)?;
+            let blinding_scalar = ecdh_kdf(&ephemeral_key, &data, keyset_id, 0_u8)?;
 
             // Blind the primary public key
             let blinded_data = blind_public_key(&data, &blinding_scalar)?;
@@ -1037,17 +1037,14 @@ impl PreMintSecrets {
         let ephemeral_seckey = match conditions {
             SpendingConditions::P2PKConditions {
                 data: _,
-                conditions,
-            } => match conditions {
-                Some(conditions) => {
-                    if conditions.sig_flag == crate::SigFlag::SigAll {
-                        Some(SecretKey::generate())
-                    } else {
-                        None
-                    }
+                conditions: Some(conditions),
+            } => {
+                if conditions.sig_flag == crate::SigFlag::SigAll {
+                    Some(SecretKey::generate())
+                } else {
+                    None
                 }
-                None => None,
-            },
+            }
             _ => None,
         };
 
