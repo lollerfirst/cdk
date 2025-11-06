@@ -69,7 +69,7 @@ impl Wallet {
             for (proof, pre_mint_secret) in post_swap_proofs
                 .iter_mut()
                 .rev()
-                .zip(pre_swap.pre_mint_secrets.into_iter())
+                .zip(pre_swap.pre_mint_secrets)
             {
                 tracing::debug!("pre_mint_secret.p2pk_e: {:?}\n", pre_mint_secret.p2pk_e);
                 proof.p2pk_e = pre_mint_secret.p2pk_e
