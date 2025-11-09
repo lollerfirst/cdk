@@ -944,8 +944,8 @@ impl PreMintSecrets {
                 conditions: _,
             } => {
                 // Derive the blinding scalar for the primary pubkey
-                let blinding_scalar = ecdh_kdf(&ephemeral_key, &data, keyset_id, 0_u8)?;
-                Some(blind_public_key(&data, &blinding_scalar)?)
+                let blinding_scalar = ecdh_kdf(&ephemeral_key, data, keyset_id, 0_u8)?;
+                Some(blind_public_key(data, &blinding_scalar)?)
             }
             SpendingConditions::HTLCConditions { .. } => {
                 // For HTLC conditions, we don't blind the hash
@@ -1029,7 +1029,7 @@ impl PreMintSecrets {
             None => None,
         };
 
-        return Ok((
+        Ok((
             Some(ephemeral_pubkey),
             match (&conditions, blinded_data) {
                 (SpendingConditions::P2PKConditions { .. }, Some(blinded_data)) => {
@@ -1040,14 +1040,14 @@ impl PreMintSecrets {
                 }
                 (SpendingConditions::HTLCConditions { data, .. }, None) => {
                     SpendingConditions::HTLCConditions {
-                        data: data.clone(),
+                        data: *data,
                         conditions: blinded_conditions,
                     }
                 }
                 // This should not happen because we match the same input conditions
                 _ => conditions,
             },
-        ));
+        ))
     }
 
     /// Outputs with specific spending conditions
