@@ -921,7 +921,7 @@ impl PreMintSecrets {
     /// This prevents the mint from learning the true public keys by blinding them with ephemeral keys.
     ///
     /// # Arguments
-    /// * `conditions` - The P2PK conditions containing additional pubkeys and refund keys
+    /// * `conditions` - The P2PK or HTLC conditions containing additional pubkeys and refund keys
     ///
     /// # Returns
     /// * `Result<(Option<PublicKey>, SpendingConditions), Error>` - Success or error during blinding operation
@@ -930,94 +930,124 @@ impl PreMintSecrets {
         keyset_id: Id,
         unique_e: Option<SecretKey>,
     ) -> Result<(Option<PublicKey>, SpendingConditions), Error> {
-        if let SpendingConditions::P2PKConditions { data, conditions } = conditions {
-            let ephemeral_key = match unique_e {
-                Some(unique_e) => unique_e,
-                None => SecretKey::generate(),
-            };
+        let ephemeral_key = match unique_e {
+            Some(unique_e) => unique_e,
+            None => SecretKey::generate(),
+        };
 
-            let ephemeral_pubkey = ephemeral_key.public_key();
+        let ephemeral_pubkey = ephemeral_key.public_key();
 
-            // Derive the blinding scalar for the primary pubkey
-            let blinding_scalar = ecdh_kdf(&ephemeral_key, &data, keyset_id, 0_u8)?;
+        // Extract data from conditions and potentially blind it
+        let blinded_data = match &conditions {
+            SpendingConditions::P2PKConditions {
+                data,
+                conditions: _,
+            } => {
+                // Derive the blinding scalar for the primary pubkey
+                let blinding_scalar = ecdh_kdf(&ephemeral_key, &data, keyset_id, 0_u8)?;
+                Some(blind_public_key(&data, &blinding_scalar)?)
+            }
+            SpendingConditions::HTLCConditions { .. } => {
+                // For HTLC conditions, we don't blind the hash
+                None
+            }
+        };
 
-            // Blind the primary public key
-            let blinded_data = blind_public_key(&data, &blinding_scalar)?;
-
-            // Process additional pubkeys with slots 1 to N
-            let blinded_conditions: Option<Conditions> = match conditions {
-                Some(conditions) => {
-                    let mut blinded_conditions = conditions.clone();
-
-                    let mut current_idx = 1;
-
-                    if let Some(pubkeys) = conditions.pubkeys {
-                        let mut blinded_pubkeys: Vec<PublicKey> = Vec::with_capacity(pubkeys.len());
-
-                        // Blind each additional pubkey using slots 1 through N
-                        for (idx, pubkey) in pubkeys.iter().enumerate() {
-                            let slot = (idx + 1) as u8; // Start at slot 1
-                            if slot > 10 {
-                                tracing::warn!(
-                                    "Too many pubkeys to blind (max 10 slots), skipping rest"
-                                );
-                                break;
-                            }
-
-                            current_idx += 1;
-
-                            // Derive blinding scalar for this pubkey
-                            let add_blinding_scalar =
-                                ecdh_kdf(&ephemeral_key, pubkey, keyset_id, slot)?;
-
-                            // Blind the additional pubkey
-                            let blinded_pubkey = blind_public_key(pubkey, &add_blinding_scalar)?;
-                            blinded_pubkeys.push(blinded_pubkey);
-                        }
-
-                        blinded_conditions.pubkeys = Some(blinded_pubkeys);
-                    }
-
-                    if let Some(refund_keys) = conditions.refund_keys {
-                        let mut blinded_refund_keys: Vec<PublicKey> =
-                            Vec::with_capacity(refund_keys.len());
-
-                        // Start slot after additional pubkeys
-                        let start_slot = current_idx;
-
-                        // Blind each refund key
-                        for (idx, refund_key) in refund_keys.iter().enumerate() {
-                            let slot = (start_slot + idx) as u8;
-                            if slot > 10 {
-                                tracing::warn!("Too many total keys to blind (max 10 slots), skipping rest of refund keys");
-                                break;
-                            }
-
-                            // Derive blinding scalar for this refund key
-                            let refund_blinding_scalar =
-                                ecdh_kdf(&ephemeral_key, refund_key, keyset_id, slot)?;
-
-                            // Blind the refund key
-                            let blinded_refund_key =
-                                blind_public_key(refund_key, &refund_blinding_scalar)?;
-                            blinded_refund_keys.push(blinded_refund_key);
-                        }
-
-                        blinded_conditions.refund_keys = Some(blinded_refund_keys);
-                    }
-
-                    Some(blinded_conditions)
-                }
-                None => None,
-            };
-
-            return Ok((
-                Some(ephemeral_pubkey),
-                SpendingConditions::new_p2pk(blinded_data, blinded_conditions),
-            ));
+        let (SpendingConditions::P2PKConditions {
+            data: _,
+            conditions: inner_conditions,
         }
+        | SpendingConditions::HTLCConditions {
+            data: _,
+            conditions: inner_conditions,
+        }) = conditions.clone();
 
-        Ok((None, conditions))
+        // Process additional pubkeys with slots 1 to N
+        let blinded_conditions: Option<Conditions> = match inner_conditions {
+            Some(conditions) => {
+                let mut blinded_conditions = conditions.clone();
+
+                let mut current_idx = match blinded_data {
+                    Some(_) => 1,
+                    None => 0,
+                };
+
+                if let Some(pubkeys) = conditions.pubkeys {
+                    let mut blinded_pubkeys: Vec<PublicKey> = Vec::with_capacity(pubkeys.len());
+
+                    // Blind each additional pubkey using slots 1 through N
+                    for (idx, pubkey) in pubkeys.iter().enumerate() {
+                        let slot = (idx + current_idx) as u8;
+                        if slot > 10 {
+                            tracing::warn!(
+                                "Too many pubkeys to blind (max 10 slots), skipping rest"
+                            );
+                            break;
+                        }
+
+                        current_idx += 1;
+
+                        // Derive blinding scalar for this pubkey
+                        let add_blinding_scalar =
+                            ecdh_kdf(&ephemeral_key, pubkey, keyset_id, slot)?;
+
+                        // Blind the additional pubkey
+                        let blinded_pubkey = blind_public_key(pubkey, &add_blinding_scalar)?;
+                        blinded_pubkeys.push(blinded_pubkey);
+                    }
+
+                    blinded_conditions.pubkeys = Some(blinded_pubkeys);
+                }
+
+                if let Some(refund_keys) = conditions.refund_keys {
+                    let mut blinded_refund_keys: Vec<PublicKey> =
+                        Vec::with_capacity(refund_keys.len());
+
+                    // Blind each refund key
+                    for (idx, refund_key) in refund_keys.iter().enumerate() {
+                        let slot = (current_idx + idx) as u8;
+                        if slot > 10 {
+                            tracing::warn!("Too many total keys to blind (max 10 slots), skipping rest of refund keys");
+                            break;
+                        }
+
+                        // Derive blinding scalar for this refund key
+                        let refund_blinding_scalar =
+                            ecdh_kdf(&ephemeral_key, refund_key, keyset_id, slot)?;
+
+                        // Blind the refund key
+                        let blinded_refund_key =
+                            blind_public_key(refund_key, &refund_blinding_scalar)?;
+                        blinded_refund_keys.push(blinded_refund_key);
+                    }
+
+                    blinded_conditions.refund_keys = Some(blinded_refund_keys);
+                }
+
+                Some(blinded_conditions)
+            }
+            None => None,
+        };
+
+        return Ok((
+            Some(ephemeral_pubkey),
+            match (&conditions, blinded_data) {
+                (SpendingConditions::P2PKConditions { .. }, Some(blinded_data)) => {
+                    SpendingConditions::P2PKConditions {
+                        data: blinded_data,
+                        conditions: blinded_conditions,
+                    }
+                }
+                (SpendingConditions::HTLCConditions { data, .. }, None) => {
+                    SpendingConditions::HTLCConditions {
+                        data: data.clone(),
+                        conditions: blinded_conditions,
+                    }
+                }
+                // This should not happen because we match the same input conditions
+                _ => conditions,
+            },
+        ));
     }
 
     /// Outputs with specific spending conditions
@@ -1036,6 +1066,10 @@ impl PreMintSecrets {
         // Find out if we have SIG_ALL
         let ephemeral_seckey = match conditions {
             SpendingConditions::P2PKConditions {
+                data: _,
+                conditions: Some(conditions),
+            }
+            | SpendingConditions::HTLCConditions {
                 data: _,
                 conditions: Some(conditions),
             } => {
