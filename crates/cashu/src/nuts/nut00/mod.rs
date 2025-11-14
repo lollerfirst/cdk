@@ -925,7 +925,7 @@ impl PreMintSecrets {
     ///
     /// # Returns
     /// * `Result<(Option<PublicKey>, SpendingConditions), Error>` - Success or error during blinding operation
-    fn apply_p2bk(
+    pub fn apply_p2bk(
         conditions: SpendingConditions,
         keyset_id: Id,
         unique_e: Option<SecretKey>,
@@ -985,8 +985,6 @@ impl PreMintSecrets {
                             break;
                         }
 
-                        current_idx += 1;
-
                         // Derive blinding scalar for this pubkey
                         let add_blinding_scalar =
                             ecdh_kdf(&ephemeral_key, pubkey, keyset_id, slot)?;
@@ -996,6 +994,7 @@ impl PreMintSecrets {
                         blinded_pubkeys.push(blinded_pubkey);
                     }
 
+                    current_idx += blinded_pubkeys.len();
                     blinded_conditions.pubkeys = Some(blinded_pubkeys);
                 }
 
@@ -1063,7 +1062,7 @@ impl PreMintSecrets {
 
         let mut output = Vec::with_capacity(amount_split.len());
 
-        // Find out if we have SIG_ALL
+        // If we have SIG_ALL conditions, `p2pk_e` must be the same for each output
         let ephemeral_seckey = match conditions {
             SpendingConditions::P2PKConditions {
                 data: _,

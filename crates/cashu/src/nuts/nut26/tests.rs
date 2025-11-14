@@ -1,9 +1,11 @@
 //! Tests for the NUT-26 implementation
 
+use std::str::FromStr;
+
 use crate::nuts::nut01::SecretKey;
 use crate::nuts::nut02::KeySetVersion;
 use crate::nuts::nut26::{blind_public_key, derive_signing_key_bip340, ecdh_kdf};
-use crate::Id;
+use crate::{Conditions, Id, PreMintSecrets, SigFlag, SpendingConditions};
 
 #[test]
 fn test_ecdh_kdf() {
@@ -185,4 +187,55 @@ fn test_multi_key_blinding() {
         refund_blinding2.to_secret_bytes(),
         receiver_refund_blinding2.to_secret_bytes()
     );
+}
+
+#[test]
+fn test_slot_numbers_are_consecutive() {
+    let keyset_id = Id::from_str("009a1f293253e41e").unwrap();
+
+    // Create 3 different keys
+    let key1 = SecretKey::generate().public_key();
+    let key2 = SecretKey::generate().public_key();
+    let key3 = SecretKey::generate().public_key();
+
+    let ephemeral_sk = SecretKey::generate();
+
+    let conditions = SpendingConditions::P2PKConditions {
+        data: key1,
+        conditions: Some(Conditions {
+            pubkeys: Some(vec![key2, key3]),
+            refund_keys: None,
+            num_sigs: Some(1),
+            sig_flag: SigFlag::SigInputs,
+            locktime: None,
+            num_sigs_refund: None,
+        }),
+    };
+
+    let (_, blinded) =
+        PreMintSecrets::apply_p2bk(conditions, keyset_id, Some(ephemeral_sk.clone())).unwrap();
+
+    // Extract blinded keys
+    let (blinded_key1, blinded_others) = match blinded {
+        SpendingConditions::P2PKConditions { data, conditions } => {
+            (data, conditions.unwrap().pubkeys.unwrap())
+        }
+        _ => panic!("Wrong type"),
+    };
+
+    // For each slot, try to derive and see if it matches
+    // Slot 0 should match key1
+    let r0 = ecdh_kdf(&ephemeral_sk, &key1, keyset_id, 0).unwrap();
+    let test0 = blind_public_key(&key1, &r0).unwrap();
+    assert_eq!(blinded_key1, test0, "Slot 0 should be key1");
+
+    // Slot 1 should match key2
+    let r1 = ecdh_kdf(&ephemeral_sk, &key2, keyset_id, 1).unwrap();
+    let test1 = blind_public_key(&key2, &r1).unwrap();
+    assert_eq!(blinded_others[0], test1, "Slot 1 should be key2");
+
+    // Slot 2 should match key3 (FAILS with buggy code - it uses slot 3!)
+    let r2 = ecdh_kdf(&ephemeral_sk, &key3, keyset_id, 2).unwrap();
+    let test2 = blind_public_key(&key3, &r2).unwrap();
+    assert_eq!(blinded_others[1], test2, "Slot 2 should be key3");
 }
