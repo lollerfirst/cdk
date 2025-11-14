@@ -195,6 +195,7 @@ pub fn derive_signing_key_bip340(
     }
 }
 
+#[cfg(feature = "wallet")]
 #[cfg(test)]
 mod tests;
 
